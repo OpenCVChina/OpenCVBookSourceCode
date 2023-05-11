@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # encoding:utf-8
+# 奥比中光深度相机的RGB图像和深度图像获取和显示
 
 import numpy as np 
 import cv2 as cv
@@ -26,9 +27,13 @@ def main():
             ret_depth, depth_map = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_DEPTH_MAP)
             if ret_depth:
                 # 为了在屏幕上显示深度图，需要额外做一些处理
-                color_depth_map = cv.normalize(depth_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
-                color_depth_map = cv.applyColorMap(color_depth_map, cv.COLORMAP_JET)
-                cv.imshow("DEPTH",  color_depth_map)
+                depth_map_8U = depth_map * 255.0 / 5000 # 将以毫米度量的距离归一化到0-255之间
+                depth_map_8U = np.clip(depth_map_8U, 0, 255) # 超过255的值置为255
+                depth_map_8U = np.uint8(depth_map_8U) #转成uint8格式
+                cv.imshow("Depth: Gray", depth_map_8U) #以灰度图方式显示深度
+
+                color_depth_map = cv.applyColorMap(depth_map_8U, cv.COLORMAP_JET) #转成伪彩色
+                cv.imshow("Depth: ColorMap",  color_depth_map) #以伪彩色显示深度，视觉效果更好
 
             # print("ret_bgr: {} ret_depth: {}".format(ret_bgr, ret_depth))
 
