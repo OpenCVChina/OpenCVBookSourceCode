@@ -4,82 +4,71 @@
 import numpy as np
 import cv2 as cv
 
-PALM_INPUT_SIZE = np.array([192, 192]) # wh
-HAND_INPUT_SIZE = np.array([256, 256])  # wh
-PALM_BOX_SHIFT_VECTOR = [0, -0.4]
-PALM_BOX_ENLARGE_FACTOR = 3
-PALM_LANDMARKS_INDEX_OF_PALM_BASE = 0
-PALM_LANDMARKS_INDEX_OF_MIDDLE_FINGER_BASE = 2
-HAND_BOX_SHIFT_VECTOR = [0, -0.1]
-HAND_BOX_ENLARGE_FACTOR = 1.65
-
+# 手掌检测模型输入尺寸
+INPUT_SIZE = np.array([192, 192]) # 宽、高
 
 def main():
-    # 初始化手掌检测模型
+    # 初始化模型
     # 手掌检测模型可从https://github.com/opencv/opencv_zoo/tree/master/models/palm_detection_mediapipe下载
-    palm_model = cv.dnn.readNet('palm_detection_mediapipe_2023feb.onnx')
-    # palm_model.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
-    # palm_model.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+    model = cv.dnn.readNet('palm_detection_mediapipe_2023feb.onnx')
+    # model.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
+    # model.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
 
-    # 初始化关键点估计模型
-    # 关键点估计模型可以从https://github.com/opencv/opencv_zoo/tree/master/models/handpose_estimation_mediapipe下载
-    hand_model = cv.dnn.readNet('handpose_estimation_mediapipe_2022may.onnx')
-    # hand_model.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
-    # hand_model.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+    # 打开深度相机。如果失败，修改参数为0，1，2中的某个值，继续尝试
+    orbbec_cap = cv.VideoCapture(0, cv.CAP_OBSENSOR)
+    if orbbec_cap.isOpened() == False:
+        print("Fail to open obsensor capture.")
+        exit(0)
 
-    # 打开摄像头。如果失败，修改参数为0，1，2中的某个值，继续尝试
-    deviceId = 0
-    cap = cv.VideoCapture(deviceId)
-
+    tm = cv.TickMeter()
     while cv.waitKey(1) < 0:
-        hasFrame, frame = cap.read()
-        if not hasFrame:
-            print('No frames grabbed!')
-            break
+        if orbbec_cap.grab():
+            # print("Grabbing data succeeds.")
 
-        # 手掌检测
-        h, w, _ = frame.shape
-        input_blob, pad_bias = palm_preprocess(frame)
-        palm_model.setInput(input_blob)
-        output_blob = palm_model.forward(palm_model.getUnconnectedOutLayersNames())
-        palms = palm_postprocess(output_blob, np.array([w, h]), pad_bias)    
-        
-        hands = np.empty(shape=(0, 47))
-        # 估计每只手的关键点
-        for palm in palms:
-            # 前处理
-            input_blob, rotated_palm_bbox, angle, rotation_matrix = hand_preprocess(frame, palm)
+            # 解码grab()获取的帧数据
+            # rgb数据
+            ret_bgr, frame = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
+            if ret_bgr:  
+                tm.start()
+                h, w, _ = frame.shape
 
-            # 推理
-            hand_model.setInput(input_blob)
-            output_blob = hand_model.forward(hand_model.getUnconnectedOutLayersNames())
+                # 前处理
+                input_blob, pad_bias = preprocess(frame)
 
-            # 后处理
-            handpose = hand_postprocess(output_blob, rotated_palm_bbox, angle, rotation_matrix)
-            if handpose is not None:
-                hands = np.vstack((hands, handpose))
+                # 进行模型推理
+                model.setInput(input_blob)
+                output_blob = model.forward(model.getUnconnectedOutLayersNames())
 
-        # 在图像上绘制结果
-        frame = hand_visualize(frame, hands)
-        # 在窗口显示结果
-        cv.imshow('MediaPipe Handpose Detection Demo', frame)
-        #cv.imwrite('keypoints.jpg', frame)
+                # 后处理
+                results = postprocess(output_blob, np.array([w, h]), pad_bias)        
+                tm.stop()
 
-def palm_preprocess(image):
+                # 在图像上绘制结果
+                frame = visualize(frame, results, fps=tm.getFPS())
+
+                # 在窗口显示结果
+                cv.imshow('MPPalmDet Demo', frame)
+                # cv.imwrite('palm.jpg', frame)
+                tm.reset()
+    orbbec_cap.release()
+    cv.destroyAllWindows() 
+
+def preprocess(image):
     '''
         前处理
     '''
+
     # padding
     pad_bias = np.array([0., 0.]) # 左, 上
 
-    ratio = min(PALM_INPUT_SIZE / image.shape[:2])
+    ratio = min(INPUT_SIZE / image.shape[:2])
     # 如果视频帧大小与模型输入不同，需将视频帧等比缩放并进行padding
-    if image.shape[0] != PALM_INPUT_SIZE[0] or image.shape[1] != PALM_INPUT_SIZE[1]:
+    if image.shape[0] != INPUT_SIZE[0] or image.shape[1] != INPUT_SIZE[1]:
         # 等比缩放
         ratio_size = (np.array(image.shape[:2]) * ratio).astype(int)
         image = cv.resize(image, (ratio_size[1], ratio_size[0]))
-        pad_h = PALM_INPUT_SIZE[0] - ratio_size[0]
-        pad_w = PALM_INPUT_SIZE[1] - ratio_size[1]
+        pad_h = INPUT_SIZE[0] - ratio_size[0]
+        pad_w = INPUT_SIZE[1] - ratio_size[1]
         pad_bias[0] = left = pad_w // 2
         pad_bias[1] = top = pad_h // 2
         right = pad_w - left
@@ -94,7 +83,7 @@ def palm_preprocess(image):
     pad_bias = (pad_bias / ratio).astype(int)
     return image[np.newaxis, :, :, :], pad_bias # hwc -> nhwc
 
-def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8, nms_threshold=0.3, top_k=5000):
+def postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8, nms_threshold=0.3, top_k=5000):
     '''
         后处理
     '''
@@ -108,11 +97,9 @@ def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8,
     score = 1 / (1 + np.exp(-score))
 
     # 计算矩形框
-    # 手掌检测模型输入尺寸
-    PALM_INPUT_SIZE = np.array([192, 192]) # wh
     anchors = load_anchors()
-    cxy_delta = box_delta[:, :2] / PALM_INPUT_SIZE
-    wh_delta = box_delta[:, 2:] / PALM_INPUT_SIZE
+    cxy_delta = box_delta[:, :2] / INPUT_SIZE
+    wh_delta = box_delta[:, 2:] / INPUT_SIZE
     xy1 = (cxy_delta - wh_delta / 2 + anchors) * scale
     xy2 = (cxy_delta + wh_delta / 2 + anchors) * scale
     boxes = np.concatenate([xy1, xy2], axis=1)
@@ -127,7 +114,7 @@ def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8,
 
     # 获取手掌关键点
     selected_landmarks = landmark_delta[keep_idx].reshape(-1, 7, 2)
-    selected_landmarks = selected_landmarks / PALM_INPUT_SIZE
+    selected_landmarks = selected_landmarks / INPUT_SIZE
     selected_anchors = anchors[keep_idx]
     for idx, landmark in enumerate(selected_landmarks):
         landmark += selected_anchors[idx]
@@ -141,196 +128,31 @@ def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8,
     # ]
     return np.c_[selected_box.reshape(-1, 4), selected_landmarks.reshape(-1, 14), selected_score.reshape(-1, 1)]
 
-def palm_visualize(image, palm_box, palm_landmarks):
+def visualize(image, results, print_results=False, fps=None):
     '''
         绘制结果
     '''
     output = image.copy()
 
-    # score = palm[-1]
-    # palm_box = palm[0:4]
-    # palm_landmarks = palm[4:-1].reshape(7, 2)
+    # 帧率
+    if fps is not None:
+        cv.putText(output, 'FPS: {:.2f}'.format(fps), (0, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
 
-    # 得分
-    # palm_box = palm_box.astype(np.int32)
-    # cv.putText(output, '{:.4f}'.format(score), (palm_box[0], palm_box[1]+12), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0))
+    for idx, palm in enumerate(results):
+        score = palm[-1]
+        palm_box = palm[0:4]
+        palm_landmarks = palm[4:-1].reshape(7, 2)
 
-    # 矩形框
-    palm_box = palm_box.astype(np.int32)
-    cv.rectangle(output, (palm_box[0], palm_box[1]), (palm_box[2], palm_box[3]), (0, 255, 0), 2)
+        # 得分
+        palm_box = palm_box.astype(np.int32)
+        cv.putText(output, '{:.4f}'.format(score), (palm_box[0], palm_box[1]+12), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0))
 
-    # 关键点
-    palm_landmarks = palm_landmarks.astype(np.int32)
-    for p in palm_landmarks:
-        cv.circle(output, p, 2, (0, 0, 255), 2)
+        # 矩形框
+        cv.rectangle(output, (palm_box[0], palm_box[1]), (palm_box[2], palm_box[3]), (0, 255, 0), 2)
 
-    return output
-
-def hand_preprocess(image, palm):
-    '''
-    旋转输入图像进行推理
-    参数：
-      image - 输入图像，通道顺序为BGR
-      palm_bbox - 手掌矩形框[[x1, y1], [x2, y2]]，为palm[0:4] 
-      palm_landmarks - 7个手掌关键点[7, 2]，为palm[4:18]
-    返回值:
-      rotated_hand - 旋转后的手掌图像
-      rotation_matrix - 旋转矩阵
-    '''
-
-    # 旋转输入图像以获得竖直的手的图像
-    palm_bbox = palm[0:4].reshape(2, 2)
-    palm_landmarks = palm[4:18].reshape(7, 2)
-    image_copy = palm_visualize(image, palm[0:4], palm_landmarks)
-    #cv.imwrite('palm_detected.jpg', image_copy)
-    image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-
-    # 计算以手掌矩形框为旋转中心，将手掌底部关键点和中指底部关节关键点构成的向量旋转到90度的旋转矩阵
-    p1 = palm_landmarks[PALM_LANDMARKS_INDEX_OF_PALM_BASE]
-    p2 = palm_landmarks[PALM_LANDMARKS_INDEX_OF_MIDDLE_FINGER_BASE]
-    radians = np.pi / 2 - np.arctan2(-(p2[1] - p1[1]), p2[0] - p1[0])
-    radians = radians - 2 * np.pi * np.floor((radians + np.pi) / (2 * np.pi))
-    angle = np.rad2deg(radians)
-    center_palm_bbox = np.sum(palm_bbox, axis=0) / 2
-    rotation_matrix = cv.getRotationMatrix2D(center_palm_bbox, angle, 1.0)
-
-    # 旋转图像
-    rotated_image = cv.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]))
-    # 用旋转后的手掌关键点重新计算手掌矩形框
-    homogeneous_coord = np.c_[palm_landmarks, np.ones(palm_landmarks.shape[0])]
-    rotated_palm_landmarks = np.array([
-        np.dot(homogeneous_coord, rotation_matrix[0]),
-        np.dot(homogeneous_coord, rotation_matrix[1])])
-    rotated_palm_bbox = np.array([
-        np.amin(rotated_palm_landmarks, axis=1),
-        np.amax(rotated_palm_landmarks, axis=1)])  # [左上，右下]
-    image_copy = cv.cvtColor(rotated_image, cv.COLOR_RGB2BGR)
-    image_copy = palm_visualize(image_copy, rotated_palm_bbox.reshape(1, 4)[0], np.transpose(rotated_palm_landmarks))
-    #cv.imwrite('palm_rotated.jpg', image_copy)
-
-    # 平移矩形框
-    wh_rotated_palm_bbox = rotated_palm_bbox[1] - rotated_palm_bbox[0]
-    shift_vector = PALM_BOX_SHIFT_VECTOR * wh_rotated_palm_bbox
-    rotated_palm_bbox = rotated_palm_bbox + shift_vector
-    # 将矩形框变为正方形
-    center_rotated_plam_bbox = np.sum(rotated_palm_bbox, axis=0) / 2
-    wh_rotated_palm_bbox = rotated_palm_bbox[1] - rotated_palm_bbox[0]
-    new_half_size = np.amax(wh_rotated_palm_bbox) / 2
-    rotated_palm_bbox = np.array([
-        center_rotated_plam_bbox - new_half_size,
-        center_rotated_plam_bbox + new_half_size])
-
-    #  扩大矩形框，使得矩形框可以包含整个手
-    center_rotated_plam_bbox = np.sum(rotated_palm_bbox, axis=0) / 2
-    wh_rotated_palm_bbox = rotated_palm_bbox[1] - rotated_palm_bbox[0]
-    new_half_size = wh_rotated_palm_bbox * PALM_BOX_ENLARGE_FACTOR / 2
-    rotated_palm_bbox = np.array([
-        center_rotated_plam_bbox - new_half_size,
-        center_rotated_plam_bbox + new_half_size])
-    image_copy = cv.cvtColor(rotated_image, cv.COLOR_RGB2BGR)
-    image_copy = palm_visualize(image_copy, rotated_palm_bbox.reshape(1, 4)[0], np.transpose(rotated_palm_landmarks))
-    #cv.imwrite('palm_extended.jpg', image_copy)
-
-    # 根据矩形框剪裁图像，并将其缩放至关键点检测模型输入大小
-    [[x1, y1], [x2, y2]] = rotated_palm_bbox.astype(np.int32)
-    diff = np.maximum([-x1, -y1, x2 - rotated_image.shape[1], y2 - rotated_image.shape[0]], 0)
-    [x1, y1, x2, y2] = [x1, y1, x2, y2] + diff
-    crop = rotated_image[y1:y2, x1:x2, :]
-    crop = cv.copyMakeBorder(crop, diff[1], diff[3], diff[0], diff[2], cv.BORDER_CONSTANT, value=(0, 0, 0))
-    image_copy = cv.cvtColor(crop, cv.COLOR_RGB2BGR)
-    #cv.imwrite('hand_crop.jpg', image_copy)
-    blob = cv.resize(crop, dsize=HAND_INPUT_SIZE, interpolation=cv.INTER_AREA).astype(np.float32) / 255.0
-
-    return blob[np.newaxis, :, :, :], rotated_palm_bbox, angle, rotation_matrix
-
-def hand_postprocess(blob, rotated_palm_bbox, angle, rotation_matrix, conf_threshold=0.8):
-    '''
-        后处理，将坐标变换回原始输入空间
-
-    '''
-    landmarks, conf = blob
-
-    if conf < conf_threshold:
-        return None
-
-    landmarks = landmarks.reshape(-1, 3)  # shape: (1, 63) -> (21, 3)
-
-    wh_rotated_palm_bbox = rotated_palm_bbox[1] - rotated_palm_bbox[0]
-    scale_factor = wh_rotated_palm_bbox / HAND_INPUT_SIZE
-    landmarks[:, :2] = (landmarks[:, :2] - HAND_INPUT_SIZE / 2) * scale_factor
-    coords_rotation_matrix = cv.getRotationMatrix2D((0, 0), angle, 1.0)
-    rotated_landmarks = np.dot(landmarks[:, :2], coords_rotation_matrix[:, :2])
-    rotated_landmarks = np.c_[rotated_landmarks, landmarks[:, 2]]
-
-    rotation_component = np.array([
-        [rotation_matrix[0][0], rotation_matrix[1][0]],
-        [rotation_matrix[0][1], rotation_matrix[1][1]]])
-    translation_component = np.array([
-        rotation_matrix[0][2], rotation_matrix[1][2]])
-    inverted_translation = np.array([
-        -np.dot(rotation_component[0], translation_component),
-        -np.dot(rotation_component[1], translation_component)])
-    inverse_rotation_matrix = np.c_[rotation_component, inverted_translation]
-
-    center = np.append(np.sum(rotated_palm_bbox, axis=0) / 2, 1)
-    original_center = np.array([
-        np.dot(center, inverse_rotation_matrix[0]),
-        np.dot(center, inverse_rotation_matrix[1])])
-    landmarks = rotated_landmarks[:, :2] + original_center
-
-    bbox = np.array([
-        np.amin(landmarks, axis=0),
-        np.amax(landmarks, axis=0)])  # [左上，右下]
-
-    wh_bbox = bbox[1] - bbox[0]
-    shift_vector = HAND_BOX_SHIFT_VECTOR * wh_bbox
-    bbox = bbox + shift_vector
-
-    center_bbox = np.sum(bbox, axis=0) / 2
-    wh_bbox = bbox[1] - bbox[0]
-    new_half_size = wh_bbox * HAND_BOX_ENLARGE_FACTOR / 2
-    bbox = np.array([
-        center_bbox - new_half_size,
-        center_bbox + new_half_size])
-
-    return np.r_[bbox.reshape(-1), landmarks.reshape(-1), conf[0]]
-
-def hand_visualize(image, hands, print_result=False):
-    output = image.copy()
-
-    for idx, handpose in enumerate(hands):
-        conf = handpose[-1]
-        bbox = handpose[0:4].astype(np.int32)
-        landmarks = handpose[4:-1].reshape(21, 2).astype(np.int32)
-
-        # 绘制关节点间的连线
-        cv.line(output, landmarks[0], landmarks[1], (255, 255, 255), 2)
-        cv.line(output, landmarks[1], landmarks[2], (255, 255, 255), 2)
-        cv.line(output, landmarks[2], landmarks[3], (255, 255, 255), 2)
-        cv.line(output, landmarks[3], landmarks[4], (255, 255, 255), 2)
-
-        cv.line(output, landmarks[0], landmarks[5], (255, 255, 255), 2)
-        cv.line(output, landmarks[5], landmarks[6], (255, 255, 255), 2)
-        cv.line(output, landmarks[6], landmarks[7], (255, 255, 255), 2)
-        cv.line(output, landmarks[7], landmarks[8], (255, 255, 255), 2)
-
-        cv.line(output, landmarks[0], landmarks[9], (255, 255, 255), 2)
-        cv.line(output, landmarks[9], landmarks[10], (255, 255, 255), 2)
-        cv.line(output, landmarks[10], landmarks[11], (255, 255, 255), 2)
-        cv.line(output, landmarks[11], landmarks[12], (255, 255, 255), 2)
-
-        cv.line(output, landmarks[0], landmarks[13], (255, 255, 255), 2)
-        cv.line(output, landmarks[13], landmarks[14], (255, 255, 255), 2)
-        cv.line(output, landmarks[14], landmarks[15], (255, 255, 255), 2)
-        cv.line(output, landmarks[15], landmarks[16], (255, 255, 255), 2)
-
-        cv.line(output, landmarks[0], landmarks[17], (255, 255, 255), 2)
-        cv.line(output, landmarks[17], landmarks[18], (255, 255, 255), 2)
-        cv.line(output, landmarks[18], landmarks[19], (255, 255, 255), 2)
-        cv.line(output, landmarks[19], landmarks[20], (255, 255, 255), 2)
-
-        # 绘制关键点
-        for p in landmarks:
+        # 关键点
+        palm_landmarks = palm_landmarks.astype(np.int32)
+        for p in palm_landmarks:
             cv.circle(output, p, 2, (0, 0, 255), 2)
 
     return output
@@ -2352,7 +2174,6 @@ def load_anchors():
                   [0.9583333, 0.9583333],
                   [0.9583333, 0.9583333],
                   [0.9583333, 0.9583333]], dtype=np.float32)
-
 
 if __name__ == '__main__':
     main()

@@ -3,6 +3,7 @@
 
 import numpy as np
 import cv2 as cv
+import math
 
 PALM_INPUT_SIZE = np.array([192, 192]) # wh
 HAND_INPUT_SIZE = np.array([256, 256])  # wh
@@ -45,6 +46,7 @@ def main():
         palms = palm_postprocess(output_blob, np.array([w, h]), pad_bias)    
         
         hands = np.empty(shape=(0, 47))
+        gestures = []
         # 估计每只手的关键点
         for palm in palms:
             # 前处理
@@ -58,16 +60,20 @@ def main():
             handpose = hand_postprocess(output_blob, rotated_palm_bbox, angle, rotation_matrix)
             if handpose is not None:
                 hands = np.vstack((hands, handpose))
+                # 识别手势
+                bending1, bending2, bending3, bending4, bending5 = getFingerBendings(handpose)
+                gesture = recognizeHandPose(bending1, bending2, bending3, bending4, bending5)
+                # gesture = recognise_gesture(handpose[4:-1].reshape(21, 2).astype(np.int32)) # 关键点
+                gestures.append(gesture)
 
         # 在图像上绘制结果
-        frame = hand_visualize(frame, hands)
+        frame = hand_visualize(frame, hands, gestures)
         # 在窗口显示结果
         cv.imshow('MediaPipe Handpose Detection Demo', frame)
-        #cv.imwrite('keypoints.jpg', frame)
 
 def palm_preprocess(image):
     '''
-        前处理
+    前处理
     '''
     # padding
     pad_bias = np.array([0., 0.]) # 左, 上
@@ -96,7 +102,7 @@ def palm_preprocess(image):
 
 def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8, nms_threshold=0.3, top_k=5000):
     '''
-        后处理
+    后处理
     '''
     score = output_blob[1][0, :, 0]
     box_delta = output_blob[0][0, :, 0:4]
@@ -141,31 +147,6 @@ def palm_postprocess(output_blob, original_shape, pad_bias, score_threshold=0.8,
     # ]
     return np.c_[selected_box.reshape(-1, 4), selected_landmarks.reshape(-1, 14), selected_score.reshape(-1, 1)]
 
-def palm_visualize(image, palm_box, palm_landmarks):
-    '''
-        绘制结果
-    '''
-    output = image.copy()
-
-    # score = palm[-1]
-    # palm_box = palm[0:4]
-    # palm_landmarks = palm[4:-1].reshape(7, 2)
-
-    # 得分
-    # palm_box = palm_box.astype(np.int32)
-    # cv.putText(output, '{:.4f}'.format(score), (palm_box[0], palm_box[1]+12), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0))
-
-    # 矩形框
-    palm_box = palm_box.astype(np.int32)
-    cv.rectangle(output, (palm_box[0], palm_box[1]), (palm_box[2], palm_box[3]), (0, 255, 0), 2)
-
-    # 关键点
-    palm_landmarks = palm_landmarks.astype(np.int32)
-    for p in palm_landmarks:
-        cv.circle(output, p, 2, (0, 0, 255), 2)
-
-    return output
-
 def hand_preprocess(image, palm):
     '''
     旋转输入图像进行推理
@@ -181,8 +162,6 @@ def hand_preprocess(image, palm):
     # 旋转输入图像以获得竖直的手的图像
     palm_bbox = palm[0:4].reshape(2, 2)
     palm_landmarks = palm[4:18].reshape(7, 2)
-    image_copy = palm_visualize(image, palm[0:4], palm_landmarks)
-    #cv.imwrite('palm_detected.jpg', image_copy)
     image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
     # 计算以手掌矩形框为旋转中心，将手掌底部关键点和中指底部关节关键点构成的向量旋转到90度的旋转矩阵
@@ -204,9 +183,6 @@ def hand_preprocess(image, palm):
     rotated_palm_bbox = np.array([
         np.amin(rotated_palm_landmarks, axis=1),
         np.amax(rotated_palm_landmarks, axis=1)])  # [左上，右下]
-    image_copy = cv.cvtColor(rotated_image, cv.COLOR_RGB2BGR)
-    image_copy = palm_visualize(image_copy, rotated_palm_bbox.reshape(1, 4)[0], np.transpose(rotated_palm_landmarks))
-    #cv.imwrite('palm_rotated.jpg', image_copy)
 
     # 平移矩形框
     wh_rotated_palm_bbox = rotated_palm_bbox[1] - rotated_palm_bbox[0]
@@ -227,9 +203,6 @@ def hand_preprocess(image, palm):
     rotated_palm_bbox = np.array([
         center_rotated_plam_bbox - new_half_size,
         center_rotated_plam_bbox + new_half_size])
-    image_copy = cv.cvtColor(rotated_image, cv.COLOR_RGB2BGR)
-    image_copy = palm_visualize(image_copy, rotated_palm_bbox.reshape(1, 4)[0], np.transpose(rotated_palm_landmarks))
-    #cv.imwrite('palm_extended.jpg', image_copy)
 
     # 根据矩形框剪裁图像，并将其缩放至关键点检测模型输入大小
     [[x1, y1], [x2, y2]] = rotated_palm_bbox.astype(np.int32)
@@ -237,16 +210,13 @@ def hand_preprocess(image, palm):
     [x1, y1, x2, y2] = [x1, y1, x2, y2] + diff
     crop = rotated_image[y1:y2, x1:x2, :]
     crop = cv.copyMakeBorder(crop, diff[1], diff[3], diff[0], diff[2], cv.BORDER_CONSTANT, value=(0, 0, 0))
-    image_copy = cv.cvtColor(crop, cv.COLOR_RGB2BGR)
-    #cv.imwrite('hand_crop.jpg', image_copy)
     blob = cv.resize(crop, dsize=HAND_INPUT_SIZE, interpolation=cv.INTER_AREA).astype(np.float32) / 255.0
 
     return blob[np.newaxis, :, :, :], rotated_palm_bbox, angle, rotation_matrix
 
 def hand_postprocess(blob, rotated_palm_bbox, angle, rotation_matrix, conf_threshold=0.8):
     '''
-        后处理，将坐标变换回原始输入空间
-
+    后处理，将坐标变换回原始输入空间
     '''
     landmarks, conf = blob
 
@@ -295,7 +265,54 @@ def hand_postprocess(blob, rotated_palm_bbox, angle, rotation_matrix, conf_thres
 
     return np.r_[bbox.reshape(-1), landmarks.reshape(-1), conf[0]]
 
-def hand_visualize(image, hands, print_result=False):
+def getFingerBending(fourFingerJoints):
+    # 计算指尖到掌关节的距离/一根手指每个指节间距离的和，
+    # 返回一个0到1之间的值，以代表手指的弯曲
+    # 0: 完全弯曲
+    # 1: 伸直的
+    dist1 = np.sqrt( np.sum( np.square( fourFingerJoints[0]- fourFingerJoints[1] ))) # 第一节指节(从手掌往之间方向)
+    dist2 = np.sqrt( np.sum( np.square( fourFingerJoints[1]- fourFingerJoints[2] ))) # 第二节指节
+    dist3 = np.sqrt( np.sum( np.square( fourFingerJoints[2]- fourFingerJoints[3] ))) # 第三节指节
+    dist4 = np.sqrt( np.sum( np.square( fourFingerJoints[0]- fourFingerJoints[3] ))) # 指尖到掌关节
+    bending = dist4 / (dist1+dist2+dist3)
+    bending = (bending - 0.4) / 0.6
+    if bending > 1:
+        bending = 1
+    if bending < 0:
+        bending = 0
+    return bending
+
+def getFingerBendings(handpose):
+    landmarks_word = handpose[4:-1].reshape(21, 2)
+
+    bending1 = getFingerBending(landmarks_word[1:5])    # 大拇指
+    bending2 = getFingerBending(landmarks_word[5:9])    # 食指
+    bending3 = getFingerBending(landmarks_word[9:13])   # 中指
+    bending4 = getFingerBending(landmarks_word[13:17])  # 无名指
+    bending5 = getFingerBending(landmarks_word[17:21])  # 小拇指
+
+    bending1 = (bending1 - 0.5) / 0.5 #大拇指特殊处理一下
+    if bending1 > 1:
+        bending1 = 1
+    if bending1 < 0:
+        bending1 = 0
+    return bending1, bending2, bending3, bending4, bending5
+
+def recognizeHandPose(bending1, bending2, bending3, bending4, bending5):
+    # 定义简单的规则用以判断“石头-剪刀-布”三个手势
+    rps = 'None'
+    if (bending2 > 0.8 and bending3 > 0.8 and bending4 > 0.8 and bending5 > 0.8):
+        rps = 'Paper'
+    elif (bending2 < 0.5 and bending3 < 0.4 and bending4 < 0.4 and bending5 < 0.4):
+        rps = 'Rock'
+    elif (bending2 > 0.8 and bending3 > 0.8 and bending4 < 0.55 and bending5 < 0.55):
+        rps = 'Scissors'
+    else:
+        rps = 'Undefined'
+
+    return rps
+
+def hand_visualize(image, hands, gestures, print_result=False):
     output = image.copy()
 
     for idx, handpose in enumerate(hands):
@@ -332,6 +349,9 @@ def hand_visualize(image, hands, print_result=False):
         # 绘制关键点
         for p in landmarks:
             cv.circle(output, p, 2, (0, 0, 255), 2)
+
+        # 绘制手势
+        cv.putText(output, gestures[idx], landmarks[0], 0, 1.3, (0, 255, 0), 2)
 
     return output
 
