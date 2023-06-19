@@ -171,7 +171,7 @@ def visualize(image, handpose, print_result=False):
 
 if __name__ == '__main__':
     # robot hand
-    robotHand = HiwonderHand('/dev/cu.usbserial-1110', 9600)
+    robotHand = HiwonderHand('/dev/ttyUSB0', 9600)
     robotHand.setMotionTime(250)
     # palm detector
     palm_detector = MPPalmDet(modelPath='./palm_detection_mediapipe_2023feb.onnx',
@@ -185,45 +185,54 @@ if __name__ == '__main__':
                                    backendId=args.backend,
                                    targetId=args.target)
 
-    # deviceId = 1
-    cap = cv.VideoCapture(args.input)
+    # 打开深度相机
+    orbbec_cap = cv.VideoCapture(0, cv.CAP_OBSENSOR)
+    if orbbec_cap.isOpened() == False:
+        print("Fail to open obsensor capture.")
+        sys.exit(1)
 
     tm = cv.TickMeter()
     while cv.waitKey(1) < 0:
-        hasFrame, frame = cap.read()
-        if not hasFrame:
-            print('No frames grabbed!')
-            break
+        # 从相机获取帧数据
+        if orbbec_cap.grab():
+            # print("Grabbing data succeeds.")
 
-        tm.start()
-        # Palm detector inference
-        palms = palm_detector.infer(frame)
-        hands = np.empty(shape=(0, 132))
+            # 解码grab()获取的帧数据
+            # rgb数据
+            ret_bgr, frame = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
+            if ret_bgr:
+                tm.start()
+                # Palm detector inference
+                palms = palm_detector.infer(frame)
+                hands = np.empty(shape=(0, 132))
 
-        # Estimate the pose of each hand
-        if len (palms) == 1:
-            # for palm in palms:
-            palm = palms[0]
-            # Handpose detector inference
-            handpose = handpose_detector.infer(frame, palm)
-            tm.stop()
+                # Estimate the pose of each hand
+                if len (palms) == 1:
+                    # for palm in palms:
+                    palm = palms[0]
+                    # Handpose detector inference
+                    handpose = handpose_detector.infer(frame, palm)
+                    tm.stop()
 
-            if handpose is not None:
-                # control robot hand/fingers
-                bending1, bending2, bending3, bending4, bending5 = getFingerBendings(handpose)
-                robotHand.setFingers(bending1, bending2, bending3, bending4, bending5)
-                # Draw results on the input image
-                frame, view_3d = visualize(frame, handpose)
-                print('finger bending: {:.2f} {:.2f} {:.2f} {:.2f} {:.2f}'.format(bending1, bending2, bending3, bending4, bending5))
-                cv.imshow('3D Pose', view_3d)
+                    if handpose is not None:
+                        # control robot hand/fingers
+                        bending1, bending2, bending3, bending4, bending5 = getFingerBendings(handpose)
+                        robotHand.setFingers(bending1, bending2, bending3, bending4, bending5)
+                        # Draw results on the input image
+                        frame, view_3d = visualize(frame, handpose)
+                        print('finger bending: {:.2f} {:.2f} {:.2f} {:.2f} {:.2f}'.format(bending1, bending2, bending3, bending4, bending5))
+                        cv.imshow('3D Pose', view_3d)
 
-        elif len (palms) > 1:
-            tm.stop()
-            cv.putText(frame, 'Too many hands', (100, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
-        else:
-            tm.stop()
-            cv.putText(frame, 'No hand', (100, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+                elif len (palms) > 1:
+                    tm.stop()
+                    cv.putText(frame, 'Too many hands', (100, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+                else:
+                    tm.stop()
+                    cv.putText(frame, 'No hand', (100, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
 
-        cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (0, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0))
-        tm.reset()
-        cv.imshow('Hand', frame)
+                cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (0, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0))
+                tm.reset()
+                cv.imshow('Hand', frame)
+
+    orbbec_cap.release()
+    cv.destroyAllWindows()

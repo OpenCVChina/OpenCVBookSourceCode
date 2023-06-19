@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # encoding:utf-8
 
-
+import sys
 import numpy as np
 import cv2 as cv
 import argparse
@@ -12,6 +12,9 @@ parser.add_argument('--video', type=str, default='slow_traffic_small.mp4', help=
 args = parser.parse_args()
 
 cap = cv.VideoCapture(args.video)
+if cap.isOpened() == False:
+    print('打开视频文件失败。')
+    sys.exit(1)
 # 读入视频第一帧
 ret,frame = cap.read()
 # 手动设置目标初始位置

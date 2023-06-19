@@ -27,24 +27,23 @@ prevstr = ""
 
 cap = cv2.VideoCapture(camIdx)
 # 打开深度相机
-orbbec_cap = cv.VideoCapture(0, cv.CAP_OBSENSOR)
+orbbec_cap = cv2.VideoCapture(0, cv2.CAP_OBSENSOR)
 if orbbec_cap.isOpened() == False:
     print("Fail to open obsensor capture.")
     exit(0)
 while True:
-    res, img = cap.read()
     if orbbec_cap.grab():
         # print("Grabbing data succeeds.")
 
         # 解码grab()获取的帧数据
         # rgb数据
-        ret_bgr, bgr_image = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
+        ret_bgr, bgr_image = orbbec_cap.retrieve(None, cv2.CAP_OBSENSOR_BGR_IMAGE)
         if ret_bgr:
-            res, points = detector.detectAndDecode(bgr_img)
+            res, points = detector.detectAndDecode(bgr_image)
 
             for idx in range(len(points)):
                 box = points[idx].astype(np.int32)
-                cv2.drawContours(img, [box], -1, (0,255,0), 3)
+                cv2.drawContours(bgr_image, [box], -1, (0,255,0), 3)
                 print('QR code{}: {}'.format(idx, res[idx]))
 
             # for t in res:
@@ -52,7 +51,7 @@ while True:
             #         print(t)
             # if res:
             #     prevstr = res[-1]
-            cv2.imshow("QRCode", bgr_img)
+            cv2.imshow("QRCode", bgr_image)
             if cv2.waitKey(30) >= 0:
                 break
 

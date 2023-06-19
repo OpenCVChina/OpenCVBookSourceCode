@@ -25,7 +25,7 @@ def main():
 
             # 解码grab()获取的帧数据
             # rgb数据
-            ret_bgr, fram = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
+            ret_bgr, frame = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
             if ret_bgr:
                 grey_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 

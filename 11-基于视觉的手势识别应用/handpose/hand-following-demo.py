@@ -171,7 +171,7 @@ def visualize(image, handpose, print_result=False):
 
 if __name__ == '__main__':
     # robot hand
-    robotHand = HiwonderHand('/dev/cu.usbserial-1110', 9600)
+    robotHand = HiwonderHand('/dev/ttyUSB0', 9600)
     robotHand.setMotionTime(250)
     # palm detector
     palm_detector = MPPalmDet(modelPath='./palm_detection_mediapipe_2023feb.onnx',
@@ -185,7 +185,6 @@ if __name__ == '__main__':
                                    backendId=args.backend,
                                    targetId=args.target)
 
-    # deviceId = 1
     cap = cv.VideoCapture(args.input)
 
     tm = cv.TickMeter()

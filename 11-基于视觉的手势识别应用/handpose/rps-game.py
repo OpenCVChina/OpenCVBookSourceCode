@@ -11,7 +11,7 @@ from mp_handpose import MPHandPose
 from mp_palmdet import MPPalmDet
 
 # robot hand
-# from hiwonderhand import HiwonderHand
+from hiwonderhand import HiwonderHand
 
 def str2bool(v):
     if v.lower() in ['on', 'yes', 'true', 'y', 't']:
@@ -182,8 +182,8 @@ def visualize(image, handpose, print_result=False):
 
 if __name__ == '__main__':
     # robot hand
-    # robotHand = HiwonderHand('/dev/cu.usbserial-1110', 9600)
-    # robotHand.setMotionTime(50)
+    robotHand = HiwonderHand('/dev/ttyUSB0', 9600)
+    robotHand.setMotionTime(50)
     # palm detector
     palm_detector = MPPalmDet(modelPath='./palm_detection_mediapipe_2023feb.onnx',
                               nmsThreshold=0.3,
@@ -196,7 +196,6 @@ if __name__ == '__main__':
                                    backendId=args.backend,
                                    targetId=args.target)
 
-    # deviceId = 1
     cap = cv.VideoCapture(args.input)
 
     tm = cv.TickMeter()
@@ -224,14 +223,14 @@ if __name__ == '__main__':
                 bending1, bending2, bending3, bending4, bending5 = getFingerBendings(handpose)
                 # 剪子包袱锤对战
                 rps = recognizeHandPose(bending1, bending2, bending3, bending4, bending5)
-                # if rps =='Scissors':
-                #     robotHand.setRock()
-                # elif rps =='Rock':
-                #     robotHand.setPaper()
-                # elif rps =='Paper':
-                #     robotHand.setScissors()
-                # else:
-                #     robotHand.setNoAction()
+                if rps =='Scissors':
+                    robotHand.setRock()
+                elif rps =='Rock':
+                    robotHand.setPaper()
+                elif rps =='Paper':
+                    robotHand.setScissors()
+                else:
+                    robotHand.setNoAction()
 
                 cv.putText(frame, 'Pose: '+rps, (100, 115), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0))
 

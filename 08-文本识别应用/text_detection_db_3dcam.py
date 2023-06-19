@@ -105,6 +105,7 @@ if __name__ == '__main__':
             cv.imshow(args.input, image)
             cv.waitKey(0)
     else: # 若输入为摄像头
+        deviceId = 0
         orbbec_cap = cv.VideoCapture(deviceId, cv.CAP_OBSENSOR)
         if orbbec_cap.isOpened() == False:
             print("Fail to open obsensor capture.")

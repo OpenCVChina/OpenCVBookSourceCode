@@ -2,6 +2,7 @@
 # encoding:utf-8
 
 
+import sys
 import cv2 as cv
 
 
@@ -24,17 +25,13 @@ def main():
     # 读入分类器文件
     if not face_cascade.load('haarcascade_frontalface_alt.xml'):
         print('--(!)Error loading face cascade')
-        exit(0)
+        sys.exit(1)
 
     # 打开深度相机
     orbbec_cap = cv.VideoCapture(0, cv.CAP_OBSENSOR)
     if orbbec_cap.isOpened() == False:
-        print("Fail to open obsensor capture.")
-        exit(0)
-
-    if not cap.isOpened:
         print('--(!)Error opening video capture')
-        exit(0)
+        sys.exit(1)
     while cv.waitKey(1) < 0:
         # 从相机获取帧数据
         if orbbec_cap.grab():

@@ -103,15 +103,15 @@ if __name__ == '__main__':
         "",
         (640, 480),
         score_threshold=0.99,
-        # backend_id=cv.dnn.DNN_BACKEND_TIMVX,
-        # target_id=cv.dnn.DNN_TARGET_NPU
+        backend_id=cv.dnn.DNN_BACKEND_TIMVX,
+        target_id=cv.dnn.DNN_TARGET_NPU
     )
     # 初始化FaceRecognizerSF
     recognizer = cv.FaceRecognizerSF.create(
         args.face_recognition_model,
         "",
-        # backend_id=0, #cv.dnn.DNN_BACKEND_TIMVX,
-        # target_id=0, #cv.dnn.DNN_TARGET_NPU
+        backend_id=0, #cv.dnn.DNN_BACKEND_TIMVX,
+        target_id=0, #cv.dnn.DNN_TARGET_NPU
     )
 
     # 读入数据库
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     # 初始化视频流
     device_id = 0
     # 打开深度相机。如果失败，修改参数为0，1，2中的某个值，继续尝试
-    orbbec_cap = cv.VideoCapture(deviceId, cv.CAP_OBSENSOR)
+    orbbec_cap = cv.VideoCapture(device_id, cv.CAP_OBSENSOR)
     if orbbec_cap.isOpened() == False:
         print("Fail to open obsensor capture.")
         exit(0)
@@ -140,32 +140,31 @@ if __name__ == '__main__':
             # rgb数据
             ret_bgr, frame = orbbec_cap.retrieve(None, cv.CAP_OBSENSOR_BGR_IMAGE)
             if ret_bgr:
+                tm.start()
+                # 人脸检测
+                faces = detect_face(detector, frame)
+                # 特征提取额
+                features = extract_feature(recognizer, frame, faces)
+                # 与数据库进行人脸比对
+                identities = []
+                for feature in features:
+                    isMatched = False
+                    for identity, db_feature in database.items():
+                        isMatched = match(recognizer, feature, db_feature)
+                        if isMatched:
+                            identities.append(identity)
+                            break
+                    if not isMatched:
+                        identities.append('Unknown')
+                tm.stop()
 
-            tm.start()
-            # 人脸检测
-            faces = detect_face(detector, frame)
-            # 特征提取额
-            features = extract_feature(recognizer, frame, faces)
-            # 与数据库进行人脸比对
-            identities = []
-            for feature in features:
-                isMatched = False
-                for identity, db_feature in database.items():
-                    isMatched = match(recognizer, feature, db_feature)
-                    if isMatched:
-                        identities.append(identity)
-                        break
-                if not isMatched:
-                    identities.append('Unknown')
-            tm.stop()
+                # 将结果绘制在图像上
+                frame = visualize(frame, faces, identities, tm.getFPS())
 
-            # 将结果绘制在图像上
-            frame = visualize(frame, faces, identities, tm.getFPS())
+                # 显示结果
+                cv.imshow('Face recognition system', frame)
 
-            # 显示结果
-            cv.imshow('Face recognition system', frame)
-
-            tm.reset()
+                tm.reset()
 
     orbbec_cap.release()
     cv.destroyAllWindows() 
