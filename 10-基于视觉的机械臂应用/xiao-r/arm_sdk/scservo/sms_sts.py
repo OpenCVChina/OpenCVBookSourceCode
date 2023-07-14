@@ -45,17 +45,17 @@ SMS_STS_GOAL_SPEED_H = 47
 SMS_STS_LOCK = 55
 
 #-------SRAM(只读)--------
-SMS_STS_PRESENT_POSITION_L = 56
-SMS_STS_PRESENT_POSITION_H = 57
-SMS_STS_PRESENT_SPEED_L = 58
-SMS_STS_PRESENT_SPEED_H = 59
-SMS_STS_PRESENT_LOAD_L = 60
-SMS_STS_PRESENT_LOAD_H = 61
-SMS_STS_PRESENT_VOLTAGE = 62
-SMS_STS_PRESENT_TEMPERATURE = 63
-SMS_STS_MOVING = 66
-SMS_STS_PRESENT_CURRENT_L = 69
-SMS_STS_PRESENT_CURRENT_H = 70
+SMS_STS_PRESENT_POSITION_L = 56         # 位置 低
+SMS_STS_PRESENT_POSITION_H = 57         # 位置 高
+SMS_STS_PRESENT_SPEED_L = 58            # 速度 低
+SMS_STS_PRESENT_SPEED_H = 59            # 速度 高
+SMS_STS_PRESENT_LOAD_L = 60             # 负载 低
+SMS_STS_PRESENT_LOAD_H = 61             # 负载 高
+SMS_STS_PRESENT_VOLTAGE = 62            # 当前电压
+SMS_STS_PRESENT_TEMPERATURE = 63        # 温度
+SMS_STS_MOVING = 66                     # 移动
+SMS_STS_PRESENT_CURRENT_L = 69          # 电流 低
+SMS_STS_PRESENT_CURRENT_H = 70          # 电流 高
 
 class sms_sts(protocol_packet_handler):
     def __init__(self, portHandler):
@@ -79,6 +79,21 @@ class sms_sts(protocol_packet_handler):
         scs_present_position = self.scs_loword(scs_present_position_speed)
         scs_present_speed = self.scs_hiword(scs_present_position_speed)
         return self.scs_tohost(scs_present_position, 15), self.scs_tohost(scs_present_speed, 15), scs_comm_result, scs_error
+
+    def ReadPosCurrent(self, scs_id):   # 读取当前电流
+        scs_present_current, scs_comm_result, scs_error = self.read4ByteTxRx(scs_id, SMS_STS_PRESENT_CURRENT_L)
+        scs_present_I = self.scs_loword(scs_present_current)
+        # scs_present_i = self.scs_hiword(scs_present_current)
+        return self.scs_tohost(scs_present_I, 15)
+
+    def ReadPosStatus(self, scs_id):   # 读取当前舵机电流和位置
+        scs_present_position_speed, scs_comm_result, scs_error = self.read4ByteTxRx(scs_id, SMS_STS_PRESENT_POSITION_L)
+        scs_present_position = self.scs_loword(scs_present_position_speed)
+        # scs_present_speed = self.scs_hiword(scs_present_position_speed)
+        scs_present_current, scs_comm_result, scs_error = self.read4ByteTxRx(scs_id, SMS_STS_PRESENT_CURRENT_L)
+        scs_present_I = self.scs_loword(scs_present_current)
+        # scs_present_i = self.scs_hiword(scs_present_current)
+        return self.scs_tohost(scs_present_I, 15), self.scs_tohost(scs_present_position, 15)
 
     def ReadMoving(self, scs_id):
         moving, scs_comm_result, scs_error = self.read1ByteTxRx(scs_id, SMS_STS_MOVING)
