@@ -117,7 +117,9 @@ def main(device_id=0, port_name='/dev/ttyUSB0'):
                 # 把结果图像显示到窗口里
                 cv.imshow('Camera', frame)
 
-    portHandler.closePort() 
+    portHandler.closePort()
+    orbbec_cap.release()
+    cv.destroyAllWindows() 
 
 def arm_init(port_name='/dev/ttyUSB0'):
     # 初始化机械臂

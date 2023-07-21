@@ -78,6 +78,8 @@ def main(device_id=0, port_name='/dev/ttyUSB0'):
                 cv.imshow('Camera', frame)
 
     portHandler.closePort() 
+    orbbec_cap.release()
+    cv.destroyAllWindows()
 
 def arm_init(port_name='/dev/ttyUSB0'):
     # 初始化机械臂

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # encoding:utf-8
 
+import sys
 import time
 import cv2 as cv
 import numpy as np
@@ -37,10 +38,11 @@ if __name__ == '__main__':
 
     # 打开摄像头，如果失败，修改device_id为0，1，2中的某个值，继续尝试
     # 仍然失败，检查USB摄像头是否连接
+    device_id = 0
     orbbec_cap = cv.VideoCapture(device_id, cv.CAP_OBSENSOR)
     if orbbec_cap.isOpened() == False:
         print("Fail to open obsensor capture.")
-        exit(0)    
+        sys.exit(1)    
     # 设置图像为320x240大小
     # 因为320x240检测效果最好，图像太大容易出误检测
     w = 320
@@ -109,6 +111,9 @@ if __name__ == '__main__':
 
                 # 把结果图像显示到窗口里
                 cv.imshow("Camera", frame)
+
+    orbbec_cap.release()
+    cv.destroyAllWindows()
         
     arm.unloadBusServo(1) #马达卸载动力
     arm.unloadBusServo(2) #马达卸载动力
