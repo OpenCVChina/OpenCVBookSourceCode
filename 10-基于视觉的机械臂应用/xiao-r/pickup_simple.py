@@ -14,7 +14,7 @@ HS_TH_LOWER = np.array([0, 180, 0])         # 目标药瓶最低hs值
 HS_TH_UPPER = np.array([30, 255, 255])      # 目标药瓶最高hs值
 BOTTLE_WIDTH    = 50    # 药瓶的实际宽度为50mm
 L0_CAM_X        = 50    # “坐立”姿态时底座中心与相机的水平距离为50mm
-END_L0_Y         = 125   # “坐立”姿态时执行器末端与底座的竖直距离为125mm
+END_L0_Y         = 115   # “坐立”姿态时执行器末端与底座的竖直距离为125mm
 
 # 舵机编号，抓手为1，底盘为6
 SCS_ID_1 = 1  # SCServo ID : 1  抓手开合
@@ -103,14 +103,14 @@ def main():
                         # Gemini2深度范围0.15m-10m，但实际上0.35m以内就无法准确测距了
                         # 在此距离外，相机可以较稳定准确的测距，但是机械臂长的范围又有限
                         # 目标距相机太远，机械臂无法触及
-                        if dist_avg > 150 and dist_avg < 330:
+                        if dist_avg > 250 and dist_avg < 330:
                             # 在图像上绘制目标的绿色矩形框，表示物体摆放距离合适
                             cv.rectangle(bgr_image, bbox[0], bbox[1], (0, 255, 0), 2)  
                             # 创建一个新的线程来控制机械臂抓取目标
                             arm_thread = threading.Thread(target=pickup, args=(dist_avg, END_L0_Y, packetHandler))
                             arm_thread.start()
                             grab = False
-                        elif dist_avg < 150:
+                        elif dist_avg < 250:
                             print('请将抓取目标摆放远一点！')
                             # 在图像上绘制目标的红色矩形框，表示物体摆放距离不合适
                             cv.rectangle(bgr_image, bbox[0], bbox[1], (0, 0, 255), 2)  
