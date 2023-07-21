@@ -46,6 +46,20 @@ def main(device_id=0, port_name='/dev/ttyUSB0'):
         backend_id=cv.dnn.DNN_BACKEND_TIMVX, # 使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
         target_id=cv.dnn.DNN_TARGET_NPU # 使用NPU
     )
+    # 装载人脸识别ONNX模型
+    recognizer = cv.FaceRecognizerSF.create(
+        './models/face_recognition_sface_2021dec.onnx',
+        '',
+        backend_id=cv.dnn.DNN_BACKEND_TIMVX, # 使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
+        target_id=cv.dnn.DNN_TARGET_NPU # 使用NPU
+    )
+
+    # 一些全局参数
+    mode = 'detect'
+    # imageScale = w / 320
+    ownerFaceFeature = []
+    missedFrames = 0
+    l2_threshold = 1.128
 
     # 循环，碰到按键盘就退出
     while cv.waitKey(1) < 0:
@@ -66,13 +80,39 @@ def main(device_id=0, port_name='/dev/ttyUSB0'):
                     # 将检测结果乘以系数，使之为原始大图像的人脸位置
                     faces *= w / BEST_DETECT_FRAME_WIDTH
 
-                for face in faces:
+                if mode == 'detect':
+                    # 如果检测出多张人脸，找出最大的人脸进行跟踪
+                    lface = find_largest_face(faces)
+                    if lface is not None:
+                        aligned_face = recognizer.alignCrop(frame, lface)
+                        ownerFaceFeature = recognizer.feature(aligned_face)
+                        mode = 'track'
+                        print('开始人脸跟踪。')
+            
+                elif mode == 'track':
+                    missedFrames += 1
 
-                    # 把人脸框画到图像上
-                    bbox = face[0:4].astype(np.int32)
-                    cv.rectangle(frame, (bbox[0], bbox[1]), (bbox[0]+bbox[2], bbox[1]+bbox[3]), (0, 255, 0), 2)
+                    for face in faces:
+                        aligned_face = recognizer.alignCrop(frame, face) # 获取对齐后的人脸
+                        afeature = recognizer.feature(aligned_face) # 提取人脸特征
+                        score = recognizer.match(ownerFaceFeature, afeature, cv.FaceRecognizerSF_FR_NORM_L2) # 比较人脸相似分数，越低越相似
+                        # print("score=", score)
 
-                    adjust_arm(packetHandler, face, (w, h)) # 转动机械臂对准人脸
+                        # 把人脸框以蓝色画到图像上
+                        bbox = face[0:4].astype(np.int32)
+                        cv.rectangle(frame, (bbox[0], bbox[1]), (bbox[0]+bbox[2], bbox[1]+bbox[3]), (255, 0, 0), 2)
+
+                        if score < l2_threshold: # 匹配成功
+                            missedFrames = 0
+                            # 把认识的人脸，以绿色画到图像上
+                            cv.rectangle(frame, (bbox[0], bbox[1]), (bbox[0]+bbox[2], bbox[1]+bbox[3]), (0, 255, 0), 3)
+                            adjust_arm(packetHandler, face, (w, h)) # 转动机械臂对准人脸
+                            break 
+
+                    if missedFrames >= 100: # 如果100帧还找不到以前的人脸
+                        missedFrames = 0
+                        mode = 'detect' # 重新查找一张新人脸
+                        print('重新找一张人脸。')
 
                 # 把结果图像显示到窗口里
                 cv.imshow('Camera', frame)
@@ -107,6 +147,16 @@ def arm_init(port_name='/dev/ttyUSB0'):
     return True, packetHandler, portHandler
 
 # def arm_unload():
+
+def find_largest_face(faces):
+    facearea = 0
+    lface = []
+    for face in faces:
+        bboxarea = face[2] * face[3]
+        if bboxarea > facearea:
+            facearea = bboxarea
+            lface = face
+    return None if facearea == 0 else lface
 
 # 此demo中只调整舵机3和舵机6
 def adjust_arm(packetHandler, face, frame_size):
