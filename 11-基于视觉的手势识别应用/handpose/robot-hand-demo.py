@@ -8,7 +8,7 @@ from hiwonderhand import HiwonderHand
 # 通过串口连接机械手掌
 # Linux系统应该是 /dev/ttyUSB0 或类似
 # macOS系统应该是 /dev/cu.usbserial-1110 或类似
-robotHand = HiwonderHand('/dev/cu.usbserial-1110', 9600)
+robotHand = HiwonderHand('/dev/ttyUSB0', 9600)
 
 # 设置机械手掌运行速度
 robotHand.setMotionTime(1000)

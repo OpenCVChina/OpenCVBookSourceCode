@@ -14,10 +14,10 @@ def main():
 
     # 装载人脸检测ONNX模型
     detector = cv.FaceDetectorYN.create(
-        "face_detection_yunet_2022mar.onnx",
+        "face_detection_yunet_2023mar.onnx",
         "",
         (640, 480), # 设置检测器处理的图像大小wh
-        score_threshold=0.99, # 阈值，应<1，越大误检测越少
+        score_threshold=0.9, # 阈值，应<1，越大误检测越少
         # backend_id=cv.dnn.DNN_BACKEND_TIMVX, # 使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
         # target_id=cv.dnn.DNN_TARGET_NPU # 使用NPU
     )
@@ -37,7 +37,6 @@ def main():
                 # 判断是否是真人的脸
                 flags = anti_spoofing(faces, depth_map)
                 visualize(faces, flags, bgr_image)
-                cv.imwrite("anti-spoofing.jpg", bgr_image)
                 cv.imshow("Demo", bgr_image)
         else:
             print("Fail to grab data from camera!")

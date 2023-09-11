@@ -39,17 +39,14 @@ def main():
                 color_depth_map = cv.normalize(depth_map, None, 0, 255, cv.NORM_MINMAX, cv.CV_8UC1)
                 color_depth_map = cv.applyColorMap(color_depth_map, cv.COLORMAP_JET)
                 cv.imshow("Depth",  color_depth_map)
-                cv.imwrite("depth.jpg", color_depth_map)
                 
                 # 根据设置的距离阈值thres把深度图二值化
                 segment_image, body_contour = segment_body(depth_map, thres)
                 cv.imshow("Segmentation", segment_image)
-                cv.imwrite("segment.jpg", segment_image)
                 if body_contour is not None:
                     # 将分割的轮廓绘制在RGB图上
                     cv.drawContours(bgr_image, body_contour, -1, (0, 255, 0), 2, cv.LINE_AA)
                 cv.imshow("Body Contour", bgr_image)
-                cv.imwrite("contour.jpg", bgr_image)
         else:
             print("Fail to grab data from camera!")
     

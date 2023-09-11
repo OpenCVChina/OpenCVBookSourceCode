@@ -21,6 +21,9 @@ def main():
     im_dst_h = cv.warpPerspective(im_src, H, (w, h))
 
     # 显示图像
+    cv.namedWindow('src image', cv.WINDOW_NORMAL)
+    cv.namedWindow('dst image', cv.WINDOW_NORMAL)
+    cv.namedWindow('dst image transformed', cv.WINDOW_NORMAL)
     cv.imshow('src image', im_src)
     cv.imshow('dst image', im_dst)
     cv.imshow('dst image transformed', im_dst_h)

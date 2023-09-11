@@ -39,7 +39,7 @@ def main(device_id=0, port_name='/dev/ttyUSB0'):
 
     # 装载人脸检测ONNX模型
     detector = cv.FaceDetectorYN.create(
-        './models/face_detection_yunet_2022mar.onnx',
+        './models/face_detection_yunet_2023mar.onnx',
         '',
         (BEST_DETECT_FRAME_WIDTH, BEST_DETECT_FRAME_HEIGHT), # 输入图像尺寸
         score_threshold=0.9, # 阈值，应<1，越大误检测越少

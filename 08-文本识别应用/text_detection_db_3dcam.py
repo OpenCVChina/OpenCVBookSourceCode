@@ -40,9 +40,9 @@ parser.add_argument('--input', '-i', type=str, help='Path to the input image. Om
 parser.add_argument('--model', '-m', type=str, default='text_detection_DB_IC15_resnet18_2021sep.onnx', help='Path to the model.')
 parser.add_argument('--backend', '-b', type=int, default=backends[0], help=help_msg_backends.format(*backends))
 parser.add_argument('--target', '-t', type=int, default=targets[0], help=help_msg_targets.format(*targets))
-parser.add_argument('--width', type=int, default=736,
+parser.add_argument('--width', type=int, default=160,
                     help='Preprocess input image by resizing to a specific width. It should be multiple by 32.')
-parser.add_argument('--height', type=int, default=736,
+parser.add_argument('--height', type=int, default=160,
                     help='Preprocess input image by resizing to a specific height. It should be multiple by 32.')
 parser.add_argument('--binary_threshold', type=float, default=0.3, help='Threshold of the binary map.')
 parser.add_argument('--polygon_threshold', type=float, default=0.5, help='Threshold of polygons.')
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
         # 显示结果
         if args.vis:
-            cv.namedWindow(args.input, cv.WINDOW_AUTOSIZE)
+            cv.namedWindow(args.input, cv.WINDOW_NORMAL)
             cv.imshow(args.input, image)
             cv.waitKey(0)
     else: # 若输入为摄像头
@@ -111,6 +111,7 @@ if __name__ == '__main__':
             print("Fail to open obsensor capture.")
             exit(0)
 
+        cv.namedWindow('{} Demo'.format(model.name), cv.WINDOW_NORMAL)
         tm = cv.TickMeter()
         while cv.waitKey(1) < 0:
            if orbbec_cap.grab():

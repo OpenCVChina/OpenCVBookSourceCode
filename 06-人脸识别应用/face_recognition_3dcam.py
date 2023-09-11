@@ -10,7 +10,7 @@ import cv2 as cv
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--database_dir', '-db', type=str, default='./database')
-parser.add_argument('--face_detection_model', '-fd', type=str, default='face_detection_yunet_2022mar.onnx')
+parser.add_argument('--face_detection_model', '-fd', type=str, default='face_detection_yunet_2023mar.onnx')
 parser.add_argument('--face_recognition_model', '-fr', type=str, default='face_recognition_sface_2021dec.onnx')
 args = parser.parse_args()
 
@@ -102,16 +102,12 @@ if __name__ == '__main__':
         args.face_detection_model,
         "",
         (640, 480),
-        score_threshold=0.99,
-        backend_id=cv.dnn.DNN_BACKEND_TIMVX,
-        target_id=cv.dnn.DNN_TARGET_NPU
+        score_threshold=0.9,
     )
     # 初始化FaceRecognizerSF
     recognizer = cv.FaceRecognizerSF.create(
         args.face_recognition_model,
-        "",
-        backend_id=0, #cv.dnn.DNN_BACKEND_TIMVX,
-        target_id=0, #cv.dnn.DNN_TARGET_NPU
+        ""
     )
 
     # 读入数据库

@@ -75,19 +75,19 @@ if __name__ == '__main__':
 
     # 装载人脸检测ONNX模型
     detector = cv.FaceDetectorYN.create(
-        "face_detection_yunet_2022mar.onnx",
+        "face_detection_yunet_2023mar.onnx",
         "",
         (320, 240), #输入图像尺寸
-        score_threshold=0.99, #阈值，应<1，越大误检测越少
-        backend_id=cv.dnn.DNN_BACKEND_TIMVX, #使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
-        target_id=cv.dnn.DNN_TARGET_NPU #使用NPU
+        score_threshold=0.9, #阈值，应<1，越大误检测越少
+        #backend_id=cv.dnn.DNN_BACKEND_TIMVX, #使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
+        #target_id=cv.dnn.DNN_TARGET_NPU #使用NPU
     )
     # 装载人脸识别ONNX模型
     recognizer = cv.FaceRecognizerSF.create(
         "face_recognition_sface_2021dec.onnx",
         "",
-        backend_id=cv.dnn.DNN_BACKEND_TIMVX, #使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
-        target_id=cv.dnn.DNN_TARGET_NPU #使用NPU
+        #backend_id=cv.dnn.DNN_BACKEND_TIMVX, #使用TIMVX后端，如果不适用NPU加速，而使用CPU计算，注释掉此行及下一行
+        #target_id=cv.dnn.DNN_TARGET_NPU #使用NPU
     )
     #一些全局参数
     mode = "detect"

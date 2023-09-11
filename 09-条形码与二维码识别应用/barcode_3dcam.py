@@ -30,7 +30,7 @@ def main():
                 grey_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
                 # 条形码检测和解码
-                retval, decode_info, decode_type, corners = bar_det.detectAndDecode(grey_frame)
+                retval, decode_info, decode_type, corners = bar_det.detectAndDecodeWithType(grey_frame)
 
                 # 绘制结果
                 if corners is not None:

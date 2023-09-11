@@ -10,7 +10,7 @@ def main():
     # 打开第一个摄像头
     cap = cv.VideoCapture(0)
     # 打开视频文件
-    #cap = cv.VideoCapture('slow_traffic_small.mp4')
+    # cap = cv.VideoCapture('slow_traffic_small.mp4')
 
     # 检查是否打开成功
     if cap.isOpened() == False:
